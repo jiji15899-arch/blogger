@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Blogger 통합 어드민 - Advanced</title>
+<link href="https://fonts.googleapis.com/css2?family=Fira+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.8.2/css/all.min.css" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+<script src="https://apis.google.com/js/api.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+</head>
+<body>
+
+<!-- ==================== SETUP SCREEN ==================== -->
+<div id="setup-screen">
+  <div class="setup-card">
+    <div class="setup-logo"><i class="fab fa-blogger-b"></i></div>
+    <div class="setup-title">Blogger 통합 어드민</div>
+    <div class="setup-desc">
+      Google 계정으로 로그인하면 블로그의 모든 기능을<br>
+      하나의 페이지에서 관리할 수 있습니다.
+    </div>
+    <div class="setup-input-wrap">
+      <div class="form-group">
+        <label class="form-label">Google OAuth Client ID</label>
+        <input class="form-input" id="client-id-input"
+               placeholder="예: 123456789.apps.googleusercontent.com" value="">
+        <small style="font-size:11px;color:var(--text);margin-top:4px;display:block;">
+          <a href="https://console.cloud.google.com/apis/credentials" target="_blank" style="color:var(--accent);">Google Cloud Console</a>에서
+          OAuth 2.0 클라이언트 ID를 발급받으세요.
+        </small>
+      </div>
+    </div>
+    <button class="btn btn-primary btn-block btn-lg" onclick="startGoogleLogin()">
+      <i class="fas fa-sign-in-alt"></i> 로그인 및 연결
+    </button>
+    <div class="setup-divider"><span>또는 데모 모드로 보기</span></div>
+    <button class="btn btn-ghost btn-block" onclick="loadDemoMode()">
+      <i class="fas fa-eye"></i> 데모 데이터로 체험하기
+    </button>
+  </div>
+</div>
+
+<!-- ==================== MAIN APP ==================== -->
+<div id="app-shell" style="display:none;width:100%;">
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon"><i class="fab fa-blogger-b"></i></div>
+    <div>
+      <div class="logo-text">Blogger Admin+</div>
+      <div class="logo-sub">AI &amp; 보호 통합 대시보드</div>
+    </div>
+  </div>
+
+  <div class="sidebar-blog" onclick="openBlogPicker()">
+    <div class="blog-selector-label">현재 블로그</div>
+    <div class="blog-name-display">
+      <span id="sb-blog-name">블로그 선택...</span>
+      <i class="fas fa-chevron-down"></i>
+    </div>
+  </div>
+
+  <div class="nav-section-label">메인</div>
+  <div class="nav-item active" onclick="nav('dashboard',this)"><i class="fas fa-th-large"></i> 대시보드</div>
+  <div class="nav-item" onclick="nav('posts',this)"><i class="fas fa-file-alt"></i> 게시물 <span class="nav-badge" id="nav-posts-count">0</span></div>
+  <div class="nav-item" onclick="nav('editor',this)"><i class="fas fa-pen"></i> 새 글 쓰기</div>
+  <div class="nav-item" onclick="nav('comments',this)"><i class="fas fa-comment"></i> 댓글 <span class="nav-badge blue" id="nav-comments-count">0</span></div>
+
+  <div class="nav-section-label">AI 도구</div>
+  <div class="nav-item" onclick="nav('ai-content',this)"><i class="fas fa-robot"></i> AI 콘텐츠 생성 <span class="nav-badge green">NEW</span></div>
+  <div class="nav-item" onclick="nav('ai-schema',this)"><i class="fas fa-code"></i> 스키마 생성</div>
+  <div class="nav-item" onclick="nav('ai-thumbnail',this)"><i class="fas fa-image"></i> 썸네일 생성</div>
+
+  <div class="nav-section-label">보호 &amp; 보안</div>
+  <div class="nav-item" onclick="nav('ad-protection',this)"><i class="fas fa-shield-alt"></i> 광고 보호</div>
+  <div class="nav-item" onclick="nav('ip-blocking',this)"><i class="fas fa-ban"></i> IP 차단 관리</div>
+
+  <div class="nav-section-label">설정</div>
+  <div class="nav-item" onclick="nav('settings',this)"><i class="fas fa-cog"></i> 설정</div>
+
+  <div class="sidebar-footer">
+    <div class="user-row">
+      <div class="user-avatar" id="sb-user-avatar">?</div>
+      <div class="user-info">
+        <div class="user-name" id="sb-user-name">사용자</div>
+        <div class="user-email" id="sb-user-email">-</div>
+      </div>
+      <i class="fas fa-sign-out-alt logout-btn" onclick="doLogout()" title="로그아웃"></i>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="topbar">
+    <div class="topbar-title" id="page-title">대시보드</div>
+    <div class="topbar-actions">
+      <button class="btn btn-ghost btn-sm" onclick="refreshCurrent()"><i class="fas fa-sync-alt"></i> 새로고침</button>
+      <button class="btn btn-primary btn-sm" onclick="nav('editor',null)"><i class="fas fa-plus"></i> 새 글 쓰기</button>
+      <a id="view-blog-btn" href="#" target="_blank" class="btn btn-ghost btn-sm"><i class="fas fa-external-link-alt"></i> 블로그 보기</a>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- DASHBOARD -->
+    <div class="panel active" id="panel-dashboard">
+      <div class="stat-grid">
+        <div class="stat-card s1"><div class="stat-icon"><i class="fas fa-eye"></i></div><div class="stat-value" id="ds-views">—</div><div class="stat-label">총 조회수</div></div>
+        <div class="stat-card s2"><div class="stat-icon"><i class="fas fa-file-alt"></i></div><div class="stat-value" id="ds-posts">—</div><div class="stat-label">발행된 게시물</div></div>
+        <div class="stat-card s3"><div class="stat-icon"><i class="fas fa-comment"></i></div><div class="stat-value" id="ds-comments">—</div><div class="stat-label">총 댓글 수</div></div>
+        <div class="stat-card s4"><div class="stat-icon"><i class="fas fa-shield-alt"></i></div><div class="stat-value" id="ds-blocked">—</div><div class="stat-label">차단된 IP</div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:1.6fr 1fr;gap:16px;margin-bottom:16px;">
+        <div class="card">
+          <div class="card-header"><div class="card-title"><i class="fas fa-file-alt" style="color:var(--main);margin-right:6px;"></i>최근 게시물</div></div>
+          <div id="dash-recent-posts"><div class="loading-wrap"><i class="fas fa-circle-notch"></i><p>불러오는 중...</p></div></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div class="card">
+            <div class="card-header"><div class="card-title"><i class="fas fa-bolt" style="color:var(--main);margin-right:6px;"></i>빠른 작업</div></div>
+            <div class="card-body" style="display:flex;flex-direction:column;gap:7px;">
+              <button class="btn btn-primary btn-block" onclick="nav('editor',null)"><i class="fas fa-pen"></i> 새 글 쓰기</button>
+              <button class="btn btn-outline btn-block" onclick="nav('ai-content',null)"><i class="fas fa-robot"></i> AI 콘텐츠 생성</button>
+              <button class="btn btn-ghost btn-block" onclick="nav('ad-protection',null)"><i class="fas fa-shield-alt"></i> 광고 보호 설정</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- POSTS -->
+    <div class="panel" id="panel-posts">
+      <div class="toolbar">
+        <div class="search-wrap"><i class="fas fa-search"></i><input class="search-input" placeholder="게시물 검색..."></div>
+        <button class="btn btn-primary btn-sm" onclick="nav('editor',null)"><i class="fas fa-plus"></i> 새 글</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>제목</th><th>상태</th><th>게시일</th><th>관리</th></tr></thead>
+          <tbody id="posts-table-body">
+            <tr><td colspan="4"><div class="loading-wrap"><i class="fas fa-circle-notch"></i><p>게시물 불러오는 중...</p></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- EDITOR + AI PANEL -->
+    <div class="panel" id="panel-editor">
+      <div class="editor-layout" id="editor-layout">
+
+        <!-- 왼쪽: 글쓰기 -->
+        <div class="editor-main">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><i class="fas fa-pen" style="color:var(--main);margin-right:6px;"></i>게시물 작성</div>
+              <div style="display:flex;gap:8px;align-items:center;">
+                <button class="btn btn-ghost btn-sm" id="ai-panel-toggle" onclick="toggleAIPanel()"><i class="fas fa-robot"></i> AI 도우미</button>
+                <button class="btn btn-ghost btn-sm" onclick="savePost(false)"><i class="fas fa-save"></i> 임시저장</button>
+                <button class="btn btn-primary btn-sm" onclick="savePost(true)"><i class="fas fa-paper-plane"></i> 발행</button>
+              </div>
+            </div>
+            <div class="card-body">
+              <div class="form-group">
+                <input class="form-input" id="editor-title" placeholder="제목을 입력하세요..." style="font-size:18px;font-weight:600;padding:14px;">
+              </div>
+              <div class="form-group">
+                <textarea class="form-textarea" id="editor-content" placeholder="내용을 작성하세요... (HTML 태그 지원)" style="min-height:460px;font-family:monospace;font-size:13px;line-height:1.6;"></textarea>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 오른쪽: AI 도우미 패널 (기본 hidden) -->
+        <div class="editor-ai-panel" id="editor-ai-panel">
+          <div class="ai-panel-inner">
+            <div class="ai-panel-header">
+              <span><i class="fas fa-robot"></i> AI 도우미</span>
+              <i class="fas fa-times" onclick="toggleAIPanel()" style="cursor:pointer;opacity:.6;"></i>
+            </div>
+
+            <!-- 탭 -->
+            <div class="ai-panel-tabs">
+              <button class="ai-tab active" onclick="switchAITab('content',this)"><i class="fas fa-pen-nib"></i> 글생성</button>
+              <button class="ai-tab" onclick="switchAITab('schema',this)"><i class="fas fa-code"></i> 스키마</button>
+              <button class="ai-tab" onclick="switchAITab('thumbnail',this)"><i class="fas fa-image"></i> 썸네일</button>
+            </div>
+
+            <!-- 탭: 글 생성 -->
+            <div class="ai-tab-content active" id="aitab-content">
+              <div class="form-group"><label class="form-label">주제 키워드</label><input class="form-input" id="ep-topic" placeholder="예: 민생회복지원금"></div>
+              <div class="form-group">
+                <label class="form-label">글 유형</label>
+                <select class="form-select" id="ep-post-type">
+                  <option value="informational">정보성</option>
+                  <option value="utility">유틸리티</option>
+                  <option value="policy_guide">정책·공공</option>
+                  <option value="review_comparison">리뷰·비교 (쿠팡파트너스)</option>
+                </select>
+              </div>
+              <button class="btn btn-primary btn-block" onclick="editorGenerateContent()" id="ep-gen-btn"><i class="fas fa-magic"></i> AI 글 생성</button>
+              <div id="ep-progress" style="display:none;margin-top:10px;" class="ai-progress-wrap">
+                <div class="ai-progress-bar"><div class="ai-progress-fill" id="ep-fill"></div></div>
+                <div class="ai-progress-text"><span id="ep-label">생성 중...</span><span id="ep-pct">0%</span></div>
+              </div>
+              <div id="ep-result" style="display:none;margin-top:12px;">
+                <button class="btn btn-primary btn-sm btn-block" onclick="applyAIToEditor()"><i class="fas fa-file-import"></i> 에디터에 적용</button>
+                <button class="btn btn-ghost btn-sm btn-block" style="margin-top:4px;" onclick="copyAIContent()"><i class="fas fa-copy"></i> 복사</button>
+                <div class="ai-panel-preview" id="ep-preview"></div>
+              </div>
+            </div>
+
+            <!-- 탭: 스키마 -->
+            <div class="ai-tab-content" id="aitab-schema">
+              <div class="form-group">
+                <label class="form-label">스키마 유형</label>
+                <select class="form-select" id="ep-schema-type">
+                  <option value="">스키마 유형 선택</option>
+                  <option value="article">기사 (Article)</option>
+                  <option value="faq">FAQ</option>
+                  <option value="product_review">상품리뷰 (Product Review)</option>
+                </select>
+              </div>
+              <button class="btn btn-primary btn-block" onclick="editorGenerateSchema()" id="ep-schema-btn"><i class="fas fa-code"></i> 스키마 생성</button>
+              <div id="ep-schema-progress" style="display:none;margin-top:10px;" class="ai-progress-wrap">
+                <div class="ai-progress-bar"><div class="ai-progress-fill ai-progress-indeterminate"></div></div>
+                <div class="ai-progress-text"><span>스키마 생성 중...</span></div>
+              </div>
+              <div id="ep-schema-result" style="display:none;margin-top:12px;">
+                <button class="btn btn-ghost btn-sm btn-block" onclick="copyEditorSchema()"><i class="fas fa-copy"></i> 스키마 복사</button>
+                <textarea class="form-textarea" id="ep-schema-code" readonly style="min-height:180px;font-family:monospace;font-size:11px;margin-top:8px;"></textarea>
+              </div>
+            </div>
+
+            <!-- 탭: 썸네일 -->
+            <div class="ai-tab-content" id="aitab-thumbnail">
+              <div class="form-group"><label class="form-label">썸네일 주제</label><input class="form-input" id="ep-thumb-topic" placeholder="예: 다이어트 방법, 재테크"></div>
+              <div class="form-group">
+                <label class="form-label">이미지 스타일</label>
+                <select class="form-select" id="ep-thumb-style">
+                  <option value="poster">포스터</option>
+                  <option value="minimal">미니멀</option>
+                  <option value="photo_realistic">사실적 사진</option>
+                  <option value="typography">타이포그래피</option>
+                  <option value="branding">브랜딩</option>
+                </select>
+              </div>
+              <button class="btn btn-primary btn-block" onclick="editorGenerateThumbnail()" id="ep-thumb-btn"><i class="fas fa-image"></i> 썸네일 생성</button>
+              <div id="ep-thumb-progress" style="display:none;margin-top:10px;" class="ai-progress-wrap">
+                <div class="ai-progress-bar"><div class="ai-progress-fill ai-progress-indeterminate"></div></div>
+                <div class="ai-progress-text"><span>이미지 생성 중...</span></div>
+              </div>
+              <div id="ep-thumb-result" style="display:none;margin-top:12px;">
+                <img id="ep-thumb-img" src="" alt="썸네일" style="width:100%;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,.15);">
+                <button class="btn btn-ghost btn-sm btn-block" style="margin-top:8px;" onclick="downloadEditorThumb()"><i class="fas fa-download"></i> 다운로드</button>
+              </div>
+            </div>
+
+          </div><!-- /ai-panel-inner -->
+        </div><!-- /editor-ai-panel -->
+      </div><!-- /editor-layout -->
+    </div><!-- /panel-editor -->
+
+    <!-- COMMENTS -->
+    <div class="panel" id="panel-comments">
+      <div class="card">
+        <div class="card-header"><div class="card-title"><i class="fas fa-comment" style="color:var(--main);margin-right:6px;"></i>댓글 관리</div></div>
+        <div id="comments-list"><div class="loading-wrap"><i class="fas fa-circle-notch"></i><p>댓글 불러오는 중...</p></div></div>
+      </div>
+    </div>
+
+    <!-- AI CONTENT -->
+    <div class="panel" id="panel-ai-content">
+      <div class="ai-section">
+        <div class="ai-section-title"><i class="fas fa-robot"></i> AI 콘텐츠 생성기</div>
+        <div class="ai-section-desc">주제만 입력하면 SEO 최적화된 블로그 포스트를 자동으로 생성합니다.</div>
+        <div class="ai-input-group">
+          <input class="ai-input" id="ai-topic" placeholder="예: 서울 가볼만한 카페 10곳">
+          <select class="form-select" id="ai-post-type" style="flex:0 0 210px;background:rgba(255,255,255,.2);color:white;border-color:rgba(255,255,255,.3);">
+            <option value="informational">정보성</option>
+            <option value="utility">유틸리티</option>
+            <option value="policy_guide">정책·공공</option>
+            <option value="review_comparison">리뷰·비교 (쿠팡파트너스)</option>
+          </select>
+          <button class="btn btn-accent" onclick="generateAIContent()" id="ai-content-gen-btn" style="flex:0 0 120px;background:white;color:#667eea;">
+            <i class="fas fa-magic"></i> 생성하기
+          </button>
+        </div>
+        <div id="ai-content-progress" style="display:none;margin-top:16px;">
+          <div class="ai-progress-bar" style="background:rgba(255,255,255,.3);">
+            <div class="ai-progress-fill" id="ai-content-fill" style="background:white;"></div>
+          </div>
+          <div class="ai-progress-text" style="color:rgba(255,255,255,.9);">
+            <span id="ai-content-label">AI 처리 시작 중</span><span id="ai-content-pct">0%</span>
+          </div>
+        </div>
+        <div class="ai-result" id="ai-content-result">
+          <div class="ai-result-header">
+            <div class="ai-result-title">생성된 콘텐츠</div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-sm btn-ghost" style="color:white;border-color:rgba(255,255,255,.4);" onclick="copyAIContentMain()"><i class="fas fa-copy"></i> 복사</button>
+              <button class="btn btn-sm btn-primary" onclick="useAIContent()"><i class="fas fa-plus"></i> 에디터에 추가</button>
+            </div>
+          </div>
+          <div class="ai-result-content" id="ai-content-text"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI SCHEMA -->
+    <div class="panel" id="panel-ai-schema">
+      <div class="card">
+        <div class="card-header"><div class="card-title"><i class="fas fa-code" style="color:var(--main);margin-right:6px;"></i>스키마 마크업 생성기 (AI)</div></div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label">스키마 유형</label>
+            <select class="form-select" id="schema-type">
+              <option value="">스키마 유형 선택</option>
+              <option value="article">기사 (Article)</option>
+              <option value="faq">FAQ</option>
+              <option value="product_review">상품리뷰 (Product Review)</option>
+            </select>
+          </div>
+          <div class="form-group"><label class="form-label">제목</label><input class="form-input" id="schema-title" placeholder="콘텐츠 제목"></div>
+          <div class="form-group"><label class="form-label">설명</label><textarea class="form-textarea" id="schema-description" placeholder="콘텐츠 설명 (메타 디스크립션)"></textarea></div>
+          <div class="form-group"><label class="form-label">URL (선택)</label><input class="form-input" id="schema-url" placeholder="https://yourblog.blogspot.com/..."></div>
+          <button class="btn btn-primary" onclick="generateSchema()" id="schema-gen-btn"><i class="fas fa-magic"></i> AI 스키마 생성</button>
+          <div id="schema-progress" style="display:none;margin-top:16px;" class="ai-progress-wrap">
+            <div class="ai-progress-bar"><div class="ai-progress-fill ai-progress-indeterminate"></div></div>
+            <div class="ai-progress-text"><span>스키마 생성 중...</span></div>
+          </div>
+          <div style="margin-top:20px;display:none;" id="schema-result">
+            <div class="form-group">
+              <label class="form-label">생성된 스키마 코드</label>
+              <textarea class="form-textarea" id="schema-code" readonly style="min-height:200px;font-family:monospace;font-size:11px;"></textarea>
+            </div>
+            <button class="btn btn-ghost" onclick="copySchema()"><i class="fas fa-copy"></i> 복사</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AI THUMBNAIL -->
+    <div class="panel" id="panel-ai-thumbnail">
+      <div class="card">
+        <div class="card-header"><div class="card-title"><i class="fas fa-image" style="color:var(--main);margin-right:6px;"></i>AI 썸네일 생성기</div></div>
+        <div class="card-body">
+          <div class="form-group"><label class="form-label">썸네일 주제</label><input class="form-input" id="thumb-topic" placeholder="예: 봄맞이 인테리어 팁"></div>
+          <div class="form-group">
+            <label class="form-label">이미지 스타일</label>
+            <select class="form-select" id="thumb-style">
+              <option value="poster">포스터</option>
+              <option value="minimal">미니멀</option>
+              <option value="photo_realistic">사실적 사진</option>
+              <option value="typography">타이포그래피</option>
+              <option value="branding">브랜딩</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="generateThumbnail()" id="thumb-gen-btn"><i class="fas fa-magic"></i> 썸네일 생성</button>
+          <div id="thumb-progress" style="display:none;margin-top:16px;" class="ai-progress-wrap">
+            <div class="ai-progress-bar"><div class="ai-progress-fill ai-progress-indeterminate"></div></div>
+            <div class="ai-progress-text"><span>이미지 생성 중... (최대 30초)</span></div>
+          </div>
+          <div style="margin-top:20px;display:none;" id="thumb-result">
+            <div style="text-align:center;padding:20px;background:var(--bg);border-radius:8px;">
+              <div id="thumb-preview"></div>
+              <button class="btn btn-ghost btn-sm" style="margin-top:10px;" onclick="downloadThumbnail()"><i class="fas fa-download"></i> 다운로드</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AD PROTECTION -->
+    <div class="panel" id="panel-ad-protection">
+      <div class="protection-section">
+        <div class="protection-card">
+          <div class="protection-header">
+            <div class="protection-title"><i class="fas fa-shield-alt" style="color:var(--main);"></i> 광고 클릭 보호</div>
+            <div class="protection-badge inactive" id="protection-status"><i class="fas fa-circle"></i><span>비활성화</span></div>
+          </div>
+          <div class="toggle-row"><div><label>광고 보호 활성화</label><div style="font-size:11px;color:var(--text);margin-top:2px;">의심스러운 클릭을 감지하고 차단합니다</div></div><div class="toggle" id="protection-toggle" onclick="toggleProtection(this)"></div></div>
+          <div class="toggle-row"><div><label>반복 클릭 차단</label><div style="font-size:11px;color:var(--text);margin-top:2px;">같은 사용자의 반복 클릭 방지</div></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+          <div class="toggle-row"><div><label>차단 모달 표시</label><div style="font-size:11px;color:var(--text);margin-top:2px;">차단된 사용자에게 안내 메시지 표시</div></div><div class="toggle on" onclick="this.classList.toggle('on')"></div></div>
+        </div>
+        <div class="protection-card">
+          <div class="protection-title" style="margin-bottom:15px;"><i class="fas fa-clock" style="color:var(--accent);"></i> 클릭 제한 설정</div>
+          <div class="form-group"><label class="form-label">시간당 최대 클릭 횟수</label><input class="form-input" type="number" id="max-clicks" value="3" min="1" max="10"></div>
+          <div class="form-group"><label class="form-label">차단 기간 (시간)</label><input class="form-input" type="number" id="block-duration" value="24" min="1" max="168"></div>
+          <button class="btn btn-primary" onclick="saveProtectionSettings()"><i class="fas fa-save"></i> 설정 저장</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- IP BLOCKING -->
+    <div class="panel" id="panel-ip-blocking">
+      <div class="protection-section">
+        <div class="protection-card">
+          <div class="protection-title" style="margin-bottom:15px;"><i class="fas fa-ban" style="color:var(--danger);"></i> 차단된 IP 목록</div>
+          <div class="form-group"><div style="display:flex;gap:8px;"><input class="form-input" id="ip-input" placeholder="차단할 IP 주소 입력 (예: 192.168.1.1)"><button class="btn btn-danger" onclick="addBlockedIP()"><i class="fas fa-ban"></i> 차단</button></div></div>
+          <div class="ip-list" id="blocked-ip-list"></div>
+          <button class="btn btn-ghost btn-sm" style="margin-top:15px;" onclick="viewBlockLog()"><i class="fas fa-list"></i> 차단 로그 보기</button>
+        </div>
+        <div class="protection-card">
+          <div class="protection-title" style="margin-bottom:15px;"><i class="fas fa-globe" style="color:var(--accent);"></i> 국가별 차단</div>
+          <div class="form-group"><div style="display:flex;gap:8px;"><input class="form-input" id="country-input" placeholder="차단할 국가 코드 (예: CN, RU)"><button class="btn btn-danger" onclick="addBlockedCountry()"><i class="fas fa-ban"></i> 차단</button></div></div>
+          <div class="ip-list" id="blocked-country-list"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="panel" id="panel-settings">
+      <div style="display:flex;flex-direction:column;gap:16px;">
+
+        <!-- AI API 설정 -->
+        <div class="card">
+          <div class="card-header"><div class="card-title"><i class="fas fa-robot" style="color:var(--main);margin-right:6px;"></i>AI API 설정</div></div>
+          <div class="card-body">
+            <div class="form-group">
+              <label class="form-label">Gemini API 키 <span style="color:var(--danger);font-size:11px;">* 필수 (콘텐츠 생성·스키마)</span></label>
+              <div style="display:flex;gap:8px;">
+                <input class="form-input" id="set-gemini-key" type="password" placeholder="AIzaSy..." style="font-family:monospace;flex:1;">
+                <button class="btn btn-ghost btn-sm" onclick="toggleKeyVisibility('set-gemini-key')" title="표시/숨김"><i class="fas fa-eye"></i></button>
+              </div>
+              <small style="font-size:11px;color:var(--text);margin-top:4px;display:block;">
+                <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--accent);">Google AI Studio</a>에서 무료 발급 · 콘텐츠 생성 + 스키마에 사용됩니다.
+              </small>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Cloudflare Worker URL <span style="color:var(--danger);font-size:11px;">* 이미지 생성 필수</span></label>
+              <input class="form-input" id="set-worker-url" placeholder="https://your-worker.your-subdomain.workers.dev" style="font-family:monospace;">
+              <small style="font-size:11px;color:var(--text);margin-top:4px;display:block;">이미지 생성용 Worker URL. 미입력시 Canvas 기반 썸네일이 생성됩니다.</small>
+            </div>
+            <div id="set-api-status" style="margin-bottom:12px;display:none;padding:10px;border-radius:8px;font-size:13px;"></div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-primary" onclick="saveAISettings()"><i class="fas fa-save"></i> API 설정 저장</button>
+              <button class="btn btn-ghost btn-sm" onclick="testGeminiKey()"><i class="fas fa-vial"></i> API 키 테스트</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 블로그 설정 -->
+        <div class="card">
+          <div class="card-header"><div class="card-title"><i class="fas fa-cog" style="color:var(--main);margin-right:6px;"></i>블로그 설정</div></div>
+          <div class="card-body">
+            <div class="form-group"><label class="form-label">블로그 이름</label><input class="form-input" id="set-blog-name" placeholder="블로그 이름"></div>
+            <div class="form-group"><label class="form-label">블로그 설명</label><textarea class="form-textarea" id="set-blog-desc" placeholder="블로그 설명"></textarea></div>
+            <button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> 설정 저장</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+</div><!-- /app-shell -->
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-title">—</div>
+      <i class="fas fa-times modal-close" onclick="closeModal()"></i>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer" id="modal-footer"></div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"><i class="fas fa-check-circle"></i><span id="toast-msg"></span></div>
+
+<script src="script.js"></script>
+</body>
+</html>
