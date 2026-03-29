@@ -28,65 +28,66 @@ const GEMINI_MODEL = 'gemini-2.0-flash';
 /* =========================================
    GOOGLE LOGIN
 ========================================= */
-function resetLoginButton() {
-  const btn = document.getElementById('login-btn');
-  if (btn) {
-    btn.disabled = false;
-    btn.innerHTML = '<i class="fas fa-sign-in-alt"></i> 로그인 및 연결';
-  }
-}
-
 function startGoogleLogin() {
   const clientId = document.getElementById('client-id-input').value.trim();
   if (!clientId) { toast('Client ID를 입력해주세요.', 'error'); return; }
 
-  // GIS 라이브러리 로딩 확인
-  if (typeof google === 'undefined' || !google.accounts || !google.accounts.oauth2) {
-    toast('Google 인증 라이브러리가 로딩 중입니다. 잠시 후 다시 시도해주세요.', 'error');
+  // GIS 라이브러리 로드 확인
+  if (typeof google === 'undefined' || !google.accounts?.oauth2) {
+    toast('Google 라이브러리 로딩 중입니다. 잠시 후 다시 시도하세요.', 'error');
     return;
   }
 
   localStorage.setItem('googleClientId', clientId);
 
   // 버튼 로딩 상태
-  const btn = document.getElementById('login-btn');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 로그인 중...'; }
+  const loginBtn = document.getElementById('login-btn');
+  if (loginBtn) {
+    loginBtn.disabled = true;
+    loginBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 연결 중...';
+  }
 
   try {
     STATE.tokenClient = google.accounts.oauth2.initTokenClient({
       client_id: clientId,
       scope: SCOPES,
       callback: handleAuthResponse,
-      error_callback: function(err) {
-        resetLoginButton();
-        if (err.type === 'popup_closed') {
-          toast('로그인 창이 닫혔습니다. 다시 시도해주세요.', 'info');
-        } else {
-          toast('로그인 오류: ' + (err.message || err.type || '팝업이 차단되었을 수 있습니다.'), 'error');
-        }
-      }
     });
     STATE.tokenClient.requestAccessToken({ prompt: 'consent' });
   } catch (error) {
-    resetLoginButton();
+    resetLoginBtn();
     toast('로그인 초기화 실패: ' + error.message, 'error');
   }
 }
 
-// 동기 래퍼 함수로 변경 (GIS 콜백은 동기 함수를 기대함)
-function handleAuthResponse(response) {
+function resetLoginBtn() {
+  const loginBtn = document.getElementById('login-btn');
+  if (loginBtn) {
+    loginBtn.disabled = false;
+    loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> 로그인 및 연결';
+  }
+}
+
+async function handleAuthResponse(response) {
   if (response.error) {
-    resetLoginButton();
-    toast('로그인 실패: ' + (response.error_description || response.error), 'error');
+    resetLoginBtn();
+    // 팝업 취소는 조용히 처리
+    if (response.error !== 'access_denied' && response.error !== 'user_cancel') {
+      toast('로그인 실패: ' + response.error, 'error');
+    } else {
+      toast('로그인이 취소되었습니다.', 'info');
+    }
     return;
   }
   STATE.token = response.access_token;
-  fetchUserInfo()
-    .then(function() { return fetchBlogs(); })
-    .catch(function(error) {
-      resetLoginButton();
-      toast('연결 오류: ' + error.message, 'error');
-    });
+  toast('로그인 성공! 블로그 정보를 불러오는 중...', 'info');
+  try {
+    await fetchUserInfo();
+    await fetchBlogs();
+  } catch (error) {
+    resetLoginBtn();
+    toast('데이터 로드 실패: ' + error.message, 'error');
+  }
 }
 
 async function fetchUserInfo() {
@@ -109,16 +110,11 @@ async function fetchBlogs() {
   const res = await fetch(`${API}/users/self/blogs`, {
     headers: { Authorization: `Bearer ${STATE.token}` }
   });
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    const msg = errData?.error?.message || `서버 오류 (HTTP ${res.status})`;
-    throw new Error(msg);
-  }
+  if (!res.ok) throw new Error('블로그 목록을 가져올 수 없습니다.');
   const data = await res.json();
   STATE.blogs = data.items || [];
   if (!STATE.blogs.length) {
-    resetLoginButton();
-    toast('연결된 블로그가 없습니다. Blogger에서 블로그를 먼저 생성해주세요.', 'error');
+    toast('연결된 블로그가 없습니다.', 'error');
     return;
   }
   if (STATE.blogs.length === 1) {
@@ -145,42 +141,21 @@ function selectBlog(blog) {
    BLOG PICKER MODAL
 ========================================= */
 function showBlogPickerModal(blogs) {
+  // 셋업 화면을 숨기고 앱 셸을 먼저 표시 (z-index 충돌 방지)
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('app-shell').style.display = 'flex';
+
   const items = blogs.map((b, i) => `
-    <div class="blog-pick-item" data-idx="${i}" style="
+    <div onclick="pickBlog(${i})" style="
       padding:14px 16px; cursor:pointer; border-radius:8px;
       border:1px solid var(--border); margin-bottom:8px;
-      transition:all .15s; background:var(--card);">
+      transition:all .15s; background:var(--card);"
+      onmouseover="this.style.borderColor='var(--main)';this.style.background='#f0f4ff'"
+      onmouseout="this.style.borderColor='var(--border)';this.style.background='var(--card)'">
       <div style="font-weight:600;color:var(--title);font-size:14px;">${b.name}</div>
       <div style="font-size:12px;color:var(--text);margin-top:2px;">${b.url}</div>
     </div>`).join('');
-
-  openModal(
-    '블로그 선택',
-    `<p style="color:var(--text);font-size:13px;margin-bottom:14px;">연결된 블로그 ${blogs.length}개가 있습니다. 관리할 블로그를 선택하세요.</p>${items}`,
-    []
-  );
-
-  // inline onclick 대신 이벤트 위임 사용 (더 안정적)
-  const modalBody = document.getElementById('modal-body');
-  if (modalBody) {
-    modalBody.onclick = function(e) {
-      const item = e.target.closest('.blog-pick-item');
-      if (item) {
-        const idx = parseInt(item.getAttribute('data-idx'), 10);
-        modalBody.onclick = null;
-        pickBlog(idx);
-      }
-    };
-    // 호버 효과
-    modalBody.addEventListener('mouseover', function(e) {
-      const item = e.target.closest('.blog-pick-item');
-      if (item) { item.style.borderColor = 'var(--main)'; item.style.background = '#f0f4ff'; }
-    });
-    modalBody.addEventListener('mouseout', function(e) {
-      const item = e.target.closest('.blog-pick-item');
-      if (item) { item.style.borderColor = 'var(--border)'; item.style.background = 'var(--card)'; }
-    });
-  }
+  openModal('블로그 선택', `<p style="color:var(--text);font-size:13px;margin-bottom:14px;">연결된 블로그 ${blogs.length}개가 있습니다. 관리할 블로그를 선택하세요.</p>${items}`, []);
 }
 
 function pickBlog(idx) {
@@ -285,6 +260,16 @@ function switchAITab(name, el) {
 ========================================= */
 async function loadDashboard() {
   if (STATE.demo) { loadDemoDashboard(); return; }
+  if (!STATE.blogId) {
+    // 블로그가 선택되지 않은 경우 — 선택 유도
+    document.getElementById('ds-views').textContent = '—';
+    document.getElementById('ds-posts').textContent = '—';
+    document.getElementById('ds-comments').textContent = '—';
+    document.getElementById('ds-blocked').textContent = STATE.blockedIPs.length;
+    document.getElementById('dash-recent-posts').innerHTML =
+      '<p style="padding:20px;color:var(--text);font-size:13px;text-align:center;">왼쪽 상단에서 블로그를 선택해주세요.</p>';
+    return;
+  }
   try {
     const res = await fetch(`${API}/blogs/${STATE.blogId}`, {
       headers: { Authorization: `Bearer ${STATE.token}` }
