@@ -23,7 +23,7 @@ const STATE = {
 
 const API = 'https://www.googleapis.com/blogger/v3';
 const SCOPES = 'https://www.googleapis.com/auth/blogger openid profile email';
-const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_MODEL = 'gemini-2.5-flash';
 
 /* =========================================
    GOOGLE LOGIN
