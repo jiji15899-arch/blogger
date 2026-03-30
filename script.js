@@ -18,7 +18,7 @@ const STATE = {
   aiGeneratedContent: '',
   geminiApiKey: '',
   cfWorkerUrl: '',
-  aiPanelOpen: false,
+  aiPanelOpen: true,
 };
 
 const API = 'https://www.googleapis.com/blogger/v3';
